@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Name Forge — SaaS name generator + live domain check</title>
+<style>
+  :root{
+    --paper:#F5F6FA;
+    --ink:#15171E;
+    --ink-soft:#565A67;
+    --line:#E1E3EC;
+    --card:#FFFFFF;
+    --accent:#4B3BFF;
+    --accent-soft:#ECEAFF;
+    --open:#0FA958;
+    --open-soft:#E4F6ED;
+    --taken:#C0435C;
+    --taken-soft:#F9E9ED;
+    --pending:#B7BAC6;
+    --radius:14px;
+    --mono:ui-monospace,"SF Mono","Cascadia Code","Roboto Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  body{padding:32px 20px 80px;line-height:1.5}
+  .wrap{max-width:960px;margin:0 auto}
+
+  header{margin-bottom:26px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:600;margin:0 0 8px}
+  h1{font-family:var(--mono);font-size:clamp(28px,5vw,42px);font-weight:700;letter-spacing:-.02em;margin:0 0 10px;line-height:1.05}
+  .lede{max-width:60ch;color:var(--ink-soft);font-size:15.5px;margin:0}
+  .lede b{color:var(--ink);font-weight:600}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-top:22px}
+  .panel h2{font-size:12px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 14px;font-weight:600}
+
+  label.field{display:block;font-size:13px;font-weight:600;margin:0 0 6px}
+  .hint{font-weight:400;color:var(--ink-soft)}
+  input[type=text]{width:100%;font-family:var(--mono);font-size:15px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink)}
+  input[type=text]:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+
+  .row{display:flex;flex-wrap:wrap;gap:20px;margin-top:16px}
+  .col{flex:1 1 200px;min-width:180px}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-family:var(--sans);font-size:13px;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--paper);cursor:pointer;user-select:none;transition:.12s}
+  .chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+  .chip:hover{border-color:var(--accent)}
+
+  .tlds{display:flex;gap:8px;flex-wrap:wrap}
+  .tld{font-family:var(--mono);font-size:13px;padding:7px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer;user-select:none}
+  .tld[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
+
+  .actions{display:flex;gap:12px;align-items:center;margin-top:20px;flex-wrap:wrap}
+  button.go{font-family:var(--sans);font-size:15px;font-weight:600;color:#fff;background:var(--accent);border:none;border-radius:10px;padding:13px 24px;cursor:pointer;transition:.12s}
+  button.go:hover{filter:brightness(1.08)}
+  button.go:disabled{opacity:.5;cursor:default}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:14px;border-radius:10px;padding:12px 18px;cursor:pointer}
+  button.ghost:hover{border-color:var(--accent)}
+  .status{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft)}
+
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:26px 0 4px;font-size:12.5px;color:var(--ink-soft);font-family:var(--mono)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .dot.open{background:var(--open)} .dot.taken{background:var(--taken)} .dot.pending{background:var(--pending)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:14px}
+  .name{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px 16px;display:flex;flex-direction:column;gap:11px;transition:.15s}
+  .name.has-open{border-color:var(--open);box-shadow:0 0 0 1px var(--open) inset}
+  .name .word{font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:-.01em}
+  .name .strat{font-size:11px;color:var(--ink-soft);font-family:var(--mono);letter-spacing:.04em;text-transform:uppercase}
+  .doms{display:flex;flex-direction:column;gap:5px}
+  .dom{display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:13px;padding:5px 9px;border-radius:7px;background:var(--paper)}
+  .dom .tldname{color:var(--ink-soft)}
+  .dom .state{font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .dom.s-open{background:var(--open-soft)} .dom.s-open .state{color:var(--open)}
+  .dom.s-taken .state{color:var(--taken)}
+  .dom.s-pending .state{color:var(--pending)}
+  .dom.s-open a{color:var(--open);text-decoration:none;border-bottom:1px dotted}
+  .dom.s-error .state{color:var(--ink-soft)}
+
+  .empty{color:var(--ink-soft);font-family:var(--mono);font-size:14px;padding:40px 0;text-align:center}
+
+  .note{margin-top:30px;border-left:3px solid var(--accent);background:var(--accent-soft);padding:14px 16px;border-radius:0 10px 10px 0;font-size:13.5px;color:#2E2A6B}
+  .note b{color:#1c1850}
+  .note a{color:var(--accent);font-weight:600}
+
+  footer{margin-top:34px;font-size:12px;color:var(--ink-soft);font-family:var(--mono);text-align:center}
+  @media (prefers-reduced-motion:no-preference){
+    .name{animation:pop .28s ease both}
+    @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="kicker">Name Forge</p>
+    <h1>Coin a name.<br>Check if it's actually free.</h1>
+    <p class="lede">Generate brandable names for your AI social-media scheduler, then watch the <b>.com / .ai / .io</b> lights go green or red — checked live against public DNS, right here in your browser. No more guessing whether it's taken.</p>
+  </header>
+
+  <div class="panel">
+    <h2>1 · Seeds</h2>
+    <label class="field" for="seeds">Root words or vibes <span class="hint">— comma separated. These get twisted, blended & suffixed.</span></label>
+    <input id="seeds" type="text" value="post, cue, loop, relay, orbit, pulse, cadence" spellcheck="false" autocomplete="off">
+
+    <div class="row">
+      <div class="col">
+        <label class="field">Naming styles <span class="hint">— pick any</span></label>
+        <div class="chips" id="styles">
+          <span class="chip" data-style="coined" aria-pressed="true">Invented / coined</span>
+          <span class="chip" data-style="twist" aria-pressed="true">Real word + twist</span>
+          <span class="chip" data-style="compound" aria-pressed="true">Two words blended</span>
+          <span class="chip" data-style="ai" aria-pressed="true">AI-flavored</span>
+        </div>
+      </div>
+      <div class="col">
+        <label class="field">Check these endings</label>
+        <div class="tlds" id="tlds">
+          <span class="tld" data-tld="com" aria-pressed="true">.com</span>
+          <span class="tld" data-tld="ai" aria-pressed="true">.ai</span>
+          <span class="tld" data-tld="io" aria-pressed="true">.io</span>
+          <span class="tld" data-tld="app" aria-pressed="false">.app</span>
+          <span class="tld" data-tld="co" aria-pressed="false">.co</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="go" id="run">Forge 24 names →</button>
+      <button class="ghost" id="openOnly">Show only fully-open .com</button>
+      <span class="status" id="status">Ready.</span>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot open"></span>likely available</span>
+    <span><span class="dot taken"></span>registered</span>
+    <span><span class="dot pending"></span>checking…</span>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="empty">Hit <b>Forge</b> to generate a batch and check domains.</div>
+  </div>
+
+  <div class="note">
+    <b>Read this before you buy anything.</b> A green light means the domain has <b>no DNS records</b> — a strong signal it's unregistered, but not proof. Some registered domains sit dark, and some open ones are premium-priced or reserved. And DNS says nothing about <b>trademarks</b>. Confirm every finalist two ways: purchase-check it at a registrar like <a href="https://instantdomainsearch.com" target="_blank" rel="noopener">Instant Domain Search</a> or <a href="https://www.namecheap.com" target="_blank" rel="noopener">Namecheap</a>, and search the <a href="https://tmsearch.uspto.gov" target="_blank" rel="noopener">USPTO trademark database</a> (or your country's) for conflicts in your class.
+  </div>
+
+  <footer>Runs entirely in your browser · DNS via dns.google · nothing is saved or sent anywhere else</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- name generation ----------
+  const aiPrefix = ["neu","syn","cog","mind","auto","vera","lumi","axo","nova","zeph"];
+  const aiSuffix = ["mind","cortex","sense","iq","synth","ora","genix","matic","flow","pilot","forge","sig"];
+  const coinVowelKits = ["a","o","i","io","ia","u","ae"];
+  const coinTails = ["o","a","io","ora","ova","ika","ary","ely","ir","ex","yx","us","el","ari","io"];
+  const softHeads = ["ka","zo","vy","lu","mi","re","no","qu","se","ti","ora","ve"];
+  const drop = w => /[aeiou]$/i.test(w) ? w.slice(0,-1) : w;
+  const cap = w => w.charAt(0).toUpperCase()+w.slice(1);
+  const pick = a => a[Math.floor(Math.random()*a.length)];
+
+  function twist(root){
+    const strategies = [
+      r => drop(r)+pick(coinTails),
+      r => r+pick(["ly","io","ic","ify","ora","wave","ify"].filter(x=>x!=="ly"||r.length>3)),
+      r => r.replace(/c/gi,"k").replace(/s$/i,"z")+pick(["","o","a"]),
+      r => cap(pick(softHeads))+drop(r).toLowerCase(),
+      r => drop(r)+"a"+pick(["ni","ro","lo","ri","va"]),
+    ];
+    return pick(strategies)(root.toLowerCase());
+  }
+  function coined(seed){
+    const strategies = [
+      () => pick(aiPrefix)+pick(coinTails),
+      () => cap(pick(softHeads))+pick(coinTails)+pick(["","n","x"]),
+      () => drop(seed.toLowerCase())+pick(coinVowelKits)+pick(["r","n","x","lo","ra"]),
+      () => pick(softHeads)+seed.toLowerCase().slice(0,3)+pick(coinTails),
+    ];
+    return pick(strategies)();
+  }
+  function compound(a,b){
+    a=a.toLowerCase(); b=b.toLowerCase();
+    const modes=[
+      ()=>drop(a)+b,
+      ()=>a+b.slice(0,1).toUpperCase()+b.slice(1),
+      ()=>drop(a)+b.slice(1),
+      ()=>a.slice(0,3)+b,
+    ];
+    return pick(modes)();
+  }
+  function aiFlavor(seed){
+    const modes=[
+      ()=>drop(seed.toLowerCase())+pick(aiSuffix),
+      ()=>pick(aiPrefix)+drop(seed.toLowerCase()),
+      ()=>seed.toLowerCase()+pick(["ai","iq","gpt"]).toUpperCase().slice(0,2).toLowerCase(),
+      ()=>cap(seed.toLowerCase())+pick(["Mind","Sense","Cortex","Pilot","Flow"]),
+    ];
+    return pick(modes)();
+  }
+
+  function clean(w){
+    w = w.replace(/[^a-z]/gi,"");
+    w = w.replace(/(.)\1\1+/gi,"$1$1");        // no triple letters
+    return w.length>=4 && w.length<=13 ? w : null;
+  }
+
+  function generate(seeds, styles, count){
+    const out = new Map();
+    let guard = 0;
+    while(out.size < count && guard < count*40){
+      guard++;
+      const s = pick(seeds);
+      let raw=null, tag="";
+      const style = pick(styles);
+      if(style==="twist"){ raw=twist(s); tag="twist"; }
+      else if(style==="coined"){ raw=coined(s); tag="coined"; }
+      else if(style==="compound"){ raw=compound(s, pick(seeds)); tag="blend"; }
+      else if(style==="ai"){ raw=aiFlavor(s); tag="ai"; }
+      if(!raw) continue;
+      const c = clean(raw);
+      if(!c) continue;
+      const key = c.toLowerCase();
+      if(!out.has(key)) out.set(key, {word:cap(key), strat:tag});
+    }
+    return [...out.values()];
+  }
+
+  // ---------- live domain check via DNS-over-HTTPS ----------
+  // NXDOMAIN (Status 3) on an NS query => no delegation => very likely unregistered.
+  async function checkDomain(domain){
+    const url = "https://dns.google/resolve?name="+encodeURIComponent(domain)+"&type=NS";
+    try{
+      const r = await fetch(url,{headers:{accept:"application/dns-json"}});
+      if(!r.ok) return "error";
+      const j = await r.json();
+      if(j.Status === 3) return "open";              // NXDOMAIN
+      if(j.Status === 0){
+        // NOERROR: registered if it has NS/SOA answer or authority
+        if((j.Answer&&j.Answer.length) || (j.Authority&&j.Authority.some(a=>a.type===6&&a.name.toLowerCase()!==domain.toLowerCase()))) {
+          // SOA in authority for the exact zone still can mean registered-but-no-NS-at-apex; treat presence of Answer as taken
+        }
+        return (j.Answer && j.Answer.length) ? "taken" : "taken";
+      }
+      return "error";
+    }catch(e){
+      return "error";
+    }
+  }
+
+  // simple concurrency limiter
+  async function pool(items, worker, limit){
+    const q=[...items]; const running=[];
+    async function next(){
+      if(!q.length) return;
+      const it=q.shift();
+      const p=worker(it).finally(()=>{
+        running.splice(running.indexOf(p),1);
+        return next();
+      });
+      running.push(p);
+      if(running.length<limit) await next();
+      await Promise.race(running);
+    }
+    const starters=[];
+    for(let i=0;i<Math.min(limit,q.length);i++) starters.push(next());
+    await Promise.all(starters);
+    await Promise.all(running);
+  }
+
+  // ---------- UI wiring ----------
+  const $=s=>document.querySelector(s);
+  const grid=$("#grid"), statusEl=$("#status"), runBtn=$("#run");
+  let onlyOpen=false;
+
+  function selected(sel){ return [...document.querySelectorAll(sel+" [aria-pressed=true]")]; }
+  function toggle(el){ el.setAttribute("aria-pressed", el.getAttribute("aria-pressed")==="true"?"false":"true"); }
+  document.querySelectorAll("#styles .chip,#tlds .tld").forEach(el=>{
+    el.addEventListener("click",()=>toggle(el));
+  });
+  $("#openOnly").addEventListener("click",e=>{
+    onlyOpen=!onlyOpen;
+    e.target.textContent = onlyOpen ? "Show all names" : "Show only fully-open .com";
+    applyFilter();
+  });
+  function applyFilter(){
+    document.querySelectorAll(".name").forEach(card=>{
+      const comOpen = card.dataset.comOpen==="1";
+      card.style.display = (onlyOpen && !comOpen) ? "none" : "";
+    });
+  }
+
+  function tldRegistrarLink(name,tld){
+    return "https://instantdomainsearch.com/domain/registration?q="+encodeURIComponent(name+"."+tld);
+  }
+
+  async function run(){
+    const seeds = $("#seeds").value.split(",").map(s=>s.trim()).filter(Boolean);
+    const styles = selected("#styles").map(e=>e.dataset.style);
+    const tlds = selected("#tlds").map(e=>e.dataset.tld);
+    if(!seeds.length){ statusEl.textContent="Add at least one seed word."; return; }
+    if(!styles.length){ statusEl.textContent="Pick at least one naming style."; return; }
+    if(!tlds.length){ statusEl.textContent="Pick at least one ending to check."; return; }
+
+    runBtn.disabled=true;
+    const names = generate(seeds, styles, 24);
+    grid.innerHTML="";
+    const cards=new Map();
+
+    names.forEach(n=>{
+      const card=document.createElement("div");
+      card.className="name";
+      card.dataset.comOpen="0";
+      card.innerHTML =
+        '<div><div class="word">'+n.word+'</div><div class="strat">'+n.strat+'</div></div>'+
+        '<div class="doms">'+tlds.map(t=>
+          '<div class="dom s-pending" data-tld="'+t+'">'+
+            '<span class="tldname">'+n.word.toLowerCase()+'.'+t+'</span>'+
+            '<span class="state" data-role="state">checking…</span>'+
+          '</div>').join("")+
+        '</div>';
+      grid.appendChild(card);
+      cards.set(n.word.toLowerCase(), card);
+    });
+
+    // build the full job list (name x tld)
+    const jobs=[];
+    names.forEach(n=>{
+      tlds.forEach(t=>jobs.push({name:n.word.toLowerCase(), tld:t}));
+    });
+
+    let done=0, openCount=0;
+    statusEl.textContent="Checking "+jobs.length+" domains…";
+
+    await pool(jobs, async job=>{
+      const res = await checkDomain(job.name+"."+job.tld);
+      const card = cards.get(job.name);
+      const cell = card.querySelector('.dom[data-tld="'+job.tld+'"]');
+      const state = cell.querySelector('[data-role=state]');
+      cell.className = "dom s-"+res;
+      if(res==="open"){
+        openCount++;
+        state.innerHTML = '<a href="'+tldRegistrarLink(job.name,job.tld)+'" target="_blank" rel="noopener">available ✓</a>';
+        if(job.tld==="com"){ card.dataset.comOpen="1"; card.classList.add("has-open"); }
+      } else if(res==="taken"){
+        state.textContent="taken";
+      } else {
+        state.textContent="check manually";
+      }
+      done++;
+      statusEl.textContent="Checked "+done+"/"+jobs.length+" · "+openCount+" open";
+      if(onlyOpen) applyFilter();
+    }, 6);
+
+    statusEl.textContent="Done · "+openCount+" open domains across "+names.length+" names.";
+    runBtn.disabled=false;
+    applyFilter();
+  }
+
+  runBtn.addEventListener("click", run);
+  $("#seeds").addEventListener("keydown",e=>{ if(e.key==="Enter") run(); });
+})();
+</script>
+</body>
+</html>
